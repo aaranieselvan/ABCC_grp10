@@ -1,0 +1,15 @@
+Status	/scratch_tmp/grp/msc_appbio/group10/outputs/SRR11318268_Aligned.sortedByCoord.out.bam	/scratch_tmp/grp/msc_appbio/group10/outputs/SRR11318269_Aligned.sortedByCoord.out.bam	/scratch_tmp/grp/msc_appbio/group10/outputs/SRR11318270_Aligned.sortedByCoord.out.bam	/scratch_tmp/grp/msc_appbio/group10/outputs/SRR11318271_Aligned.sortedByCoord.out.bam
+Assigned	32706693	33499253	31731221	32897097
+Unassigned_Unmapped	0	0	0	0
+Unassigned_Read_Type	0	0	0	0
+Unassigned_Singleton	1	1	0	0
+Unassigned_MappingQuality	0	0	0	0
+Unassigned_Chimera	0	0	0	0
+Unassigned_FragmentLength	0	0	0	0
+Unassigned_Duplicate	0	0	0	0
+Unassigned_MultiMapping	9840658	9610207	8395270	12068829
+Unassigned_Secondary	0	0	0	0
+Unassigned_NonSplit	0	0	0	0
+Unassigned_NoFeatures	1326248	1330524	1167633	1413018
+Unassigned_Overlapping_Length	0	0	0	0
+Unassigned_Ambiguity	175828	172465	203522	200976
