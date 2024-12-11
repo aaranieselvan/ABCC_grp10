@@ -43,7 +43,7 @@ Downloading the data using a nano script, and submitting as a batch job
 enables higher efficiency.
 
 ``` {bash="false"}
-# Create a nanoscript for automated downlaod of the FASTQ files
+# Create a nano-script for automated download of the FASTQ files
 nano fastq.sh 
 
 # Input the following download commands to the script
@@ -111,7 +111,7 @@ resultsDirectory="/scratch_tmp/grp/msc_appbio/group10/outputs"
 # Create the results directory if it does not exist
 mkdir -p "$resultsDirectory"
 
-# Run FastQC on all .fastq.gz files in baseDirectory
+# Run Fast-QC on all .fastq.gz files in baseDirectory
 fastqc -o "$resultsDirectory" -t 4 "$baseDirectory"/*.fastq.gz
 
 echo "end of the pipeline"
@@ -179,7 +179,7 @@ STAR
   --runThreadN 16 # Number of threads used (i.e 16) 
   --genomeDir "$genomeDir" # Specifies the directory containing the STAR genome index
   --readFilesCommand zcat # Decompresses the .gz files 
-  --readFilesIn "$baseDirectory${sample}_1.fastq.gz" "$baseDirectory${sample}_2.fastq.gz" # Specifies the imput paired end FASTQ files 
+  --readFilesIn "$baseDirectory${sample}_1.fastq.gz" "$baseDirectory${sample}_2.fastq.gz" # Specifies the input paired end FASTQ files 
   --outFileNamePrefix "$resultsDirectory${sample}_" # Output files start with the sample name
   --outSAMtype BAM SortedByCoordinate # Specifies output as a BAM file, sorted by genomic coordinates 
 
@@ -192,7 +192,7 @@ echo "pipeline completed" # Prints a message indicating all samples have been
 # Submit a batch job, whilst on the interactive node
 sbatch alignment.sh 
 
-# Queue the job to check if it is running. Slurm files detail whether the job was successful for each sample. This job took approximately 4 hours on the cpu partition. 
+# Queue the job to check if it is running. Slurm files detail whether the job was successful for each sample. This job took approximately 4 hours on the CPU partition. 
 squeue -u k21056636
 ```
 
@@ -242,6 +242,7 @@ scp k21040223@erc-hpc-login1.create.kcl.ac.uk:/scratch_tmp/grp/msc_appbio/group1
 
 ```{r}
 # Install and Load required libraries and dependencies
+tinytex::install_tinytex(force = TRUE)
 install.packages("BiocManager")
 BiocManager::install("edgeR")
 BiocManager::install("DESeq2")
@@ -261,7 +262,7 @@ getwd()
 ### Load and verify gene counts data from featureCounts
 
 ```{r}
-# Read the gene counts data into a dataframe
+# Read the gene counts data into a data frame
 gene_counts <- read.table("~/Desktop/featureCounts/all_samples_gene_counts.txt",
                           header = TRUE, # Use first row as column header
                           row.names = 1, # Set the first column as row names (i.e gene IDs)
@@ -273,7 +274,7 @@ gene_counts
 ### Formatting
 
 ```{r}
-# Display the first few rows of the dataset to confirm it has been loaded correctly 
+# Display the first few rows of the data set to confirm it has been loaded correctly 
 head(gene_counts)
 
 # Check the dimensions (rows = genes, columns = samples)
@@ -305,7 +306,7 @@ metadata <- data.frame(
     replicate = c("control_rep1", "control_rep2", "treatment_rep1", "treatment_rep2")
 )
 
-# Set the row names of the dataframe to match the sample IDs
+# Set the row names of the data frame to match the sample IDs
 rownames(metadata) <- metadata$sample
 ```
 
@@ -373,10 +374,10 @@ colnames(gene_counts) <- rownames(metadata)
 
 ## Differential Expression Analysis using DESeq2
 
-### Identify genes that are diferentially expressed between control and treated samples
+### Identify genes that are differentially expressed between control and treated samples
 
 ```{r}
-# Create DESeq2 dataset
+# Create DESeq2 data set
 dds <- DESeqDataSetFromMatrix(countData = gene_counts, colData = metadata, design = ~ condition)
 
 # Run the DESeq2 analysis to identify differential expression
@@ -402,7 +403,7 @@ volcano_data <- as.data.frame(res)  # 'res' is the DESeq2 results object
 # Add gene names as a new column as currently the genes are listed without a column name
 volcano_data$gene_name <- rownames(volcano_data)
 
-# Remove rows with NA values in padj or log2FoldChange
+# Remove rows with NA values in p adj or log2Fold-change
 volcano_data <- na.omit(volcano_data)
 
 # Filter only significant genes for labeling
@@ -410,7 +411,7 @@ volcano_data$significant <- volcano_data$padj < 0.01
 label_data <- volcano_data[volcano_data$significant == TRUE, ]  # Only significant genes
 
 # Select the top 10 most significant genes based on adjusted p-value
-top10_genes <- label_data[order(label_data$padj), ][1:10, ]  # Sort by padj and take top 10
+top10_genes <- label_data[order(label_data$padj), ][1:10, ]  # Sort by p adj and take top 10
 
 # Plot the Volcano Plot with labels
 ggplot(volcano_data, aes(x = log2FoldChange, y = -log10(padj), colour = significant)) +
@@ -457,7 +458,7 @@ library(reshape2) # Load reshape2
 heatmap_long <- melt(scaled_data) # Reshapes the data to long format 
 colnames(heatmap_long) <- c("Gene", "Sample", "Expression") # Columns names to the reshaped data
 
-# Produce a Heatmap
+# Produce a Heat-map
 library(ggplot2) # Load ggplot2 for data visualisation 
 ggplot(heatmap_long, aes(x = Sample, y = Gene, fill = Expression)) +
     geom_tile(colour = "white") + # White bordered tile for better visibility 
@@ -518,10 +519,10 @@ library(biomaRt)
 # Load the significant genes CSV file
 significant_genes <- read.csv("~/Desktop/APP_BIO/ABCC_grp10/Significant_Genes.csv")
 
-# Filter upregulated genes (Log2FoldChange > 0)
+# Filter upregulated genes (Log2Fold-change > 0)
 upregulated_genes <- significant_genes[significant_genes$log2FoldChange > 0, "X"] # X is the column name for which the gene names are listed - that is the only column we need
 
-# Filter downregulated genes (log2FoldChange < 0)
+# Filter downregulated genes (log2Fold-change < 0)
 downregulated_genes <- significant_genes[significant_genes$log2FoldChange < 0, "X"]
 
 # Save upregulated genes to a text file
@@ -537,6 +538,10 @@ downregulated_genes <- readLines("Downregulated_Genes.txt")
 # Check the first few entries to confirm successful loading
 head(upregulated_genes)
 head(downregulated_genes)
+
+# View the sum of upregulated and downregulated genes
+print(length(upregulated_genes))
+print(length(downregulated_genes))
 ```
 
 ## Perform GO Enrichment Analysis and Pathway Enrichment on Upregulated Genes
@@ -614,9 +619,9 @@ the time, therefore the code is commented out. To address this, the gene
 was manually checked in the database was not found.
 
 ```{r}
-# Connect to Ensembl (Saccharomyces cerevisiae dataset)
-#ensembl <- useMart("ensembl", dataset = "scerevisiae_gene_ensembl")
-#ensembl <- useMart("ensembl", dataset = "scerevisiae_gene_ensembl", host = "http://www.ensembl.org") ## this is the mirror site
+# Connect to Ensembl (Saccharomyces cerevisiae data set)
+#ensembl <- useMart("ensembl", data set = "scerevisiae_gene_ensembl")
+#ensembl <- useMart("ensembl", data set = "scerevisiae_gene_ensembl", host = "http://www.ensembl.org") ## this is the mirror site
 
 # Query Ensembl to get information about the gene
 #conversion <- getBM(
@@ -715,6 +720,7 @@ down_reactome_enrichment <- enrichPathway(
 #### Check the downregulated genes after mapping to ENTREZ IDs, to see if any gene was not mapped
 
 ```{r}
+print(length(downregulated_genes_entrez))
 print(sum(is.na(downregulated_genes_entrez)))  # Number of unmapped genes
 ```
 
@@ -749,7 +755,7 @@ if (!is.null(down_reactome_enrichment)) {
 ```
 
 The KEGG enrichment results returned no results. This could be due to
-the genes in the dataset may not be well annotated in KEGG pathways
+the genes in the data set may not be well annotated in KEGG pathways
 making them unsuitable to be represented by this enrichment. Or, the
 specific p-value threshold used and correction test applied may have had
 an effect, whilst making it harder for KEGG to identify trends.
