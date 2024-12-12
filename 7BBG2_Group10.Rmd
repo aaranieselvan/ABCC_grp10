@@ -870,3 +870,9 @@ ggplot(combined_df, aes(x = log_p, y = Term, size = Count, color = source)) +
 # Save the updated plot                                       
 ggsave("Downregulated_Enrichment_plot.png", bg = "white")
 ```
+
+
+
+
+
+
