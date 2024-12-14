@@ -11,7 +11,7 @@ editor_options:
     wrap: 30
 ---
 
-```{r, eval=FALSE}
+```{r, eval=FALSE, include=FALSE}
 library(knitr)
 wrap_rmd("7BBG1002_Group10.pdf", width = 60)
 ```
