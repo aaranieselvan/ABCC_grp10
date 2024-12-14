@@ -884,6 +884,9 @@ ggplot(combined_df, aes(x = log_p, y = Term, size = Count, color = source)) +
 ggsave("Downregulated_Enrichment_plot.png", bg = "white")
 ```
 
+```{r}
+system("git push origin main --force")
+```
 
 
 
