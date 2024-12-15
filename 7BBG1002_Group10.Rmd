@@ -1,0 +1,894 @@
+---
+title: "Appendix"
+output:
+  word_document: default
+  html_document:
+    df_print: paged
+  pdf_document: default
+date: "2024-12-10"
+editor_options:
+  markdown:
+    wrap: 30
+---
+
+```{r, eval=FALSE, include=FALSE}
+library(knitr)
+wrap_rmd("7BBG1002_Group10.pdf", width = 60)
+```
+
+
+```{r setup, include=FALSE}
+#knitr::opts_chunk$set(echo = TRUE)
+# Set so that long lines in R will be wrapped:
+knitr::opts_chunk$set(tidy.opts=list(width.cutoff=60), tidy=TRUE)
+```
+
+
+# **RNA Sequencing Analysis** {style="color: red;"}
+
+## Setting up with the High Performance Cluster (HPC)
+
+### Log in to the HPC
+
+``` {bash, eval = FALSE}
+ssh -i~/.ssh/create_msc k21056636@hpc.create.kcl.ac.uk
+```
+
+### Create directories to organise the raw data, outputs, and script files
+
+``` {bash, eval = FALSE}
+mkdir group_10
+cd group_10/
+
+# Create a directory containing scripts to reproduce methods section 
+mkdir readmes
+
+# Create a directory with the outputs of the scripts 
+mkdir outputs 
+
+# Create a directory with the raw data, such as RNA FASTA files and the reference genome.
+mkdir originals
+```
+
+### Download the data
+
+Downloading the data using a nano script, and submitting as a batch job
+enables higher efficiency.
+
+``` {bash, eval = FALSE}
+# Create a nano-script for automated download of the FASTQ files
+nano fastq.sh 
+
+# Input the following download commands to the script
+
+#!/bin/bash 
+
+# Download FASTQ files from the specified FTP server 
+wget -nc ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR113/068/SRR11318268/SRR11318268_2.fastq.gz 
+wget -nc ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR113/070/SRR11318270/SRR11318270_1.fastq.gz 
+wget -nc ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR113/070/SRR11318270/SRR11318270_2.fastq.gz 
+wget -nc ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR113/071/SRR11318271/SRR11318271_2.fastq.gz 
+wget -nc ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR113/069/SRR11318269/SRR11318269_2.fastq.gz 
+wget -nc ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR113/071/SRR11318271/SRR11318271_1.fastq.gz 
+wget -nc ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR113/068/SRR11318268/SRR11318268_1.fastq.gz 
+wget -nc ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR113/069/SRR11318269/SRR11318269_1.fastq.gz
+
+# Save and exit the nano script 
+```
+
+### Use Secure File Transfer Protocol (SFTP) to Upload the Reference Genome
+
+The reference genome, has been downloaded from the NCBI database to the
+local disk. It needs to be copied over onto the HPC by connecting to
+this remote server via SFTP using a private key. This step is done in a
+separate terminal window.
+
+``` {bash, eval = FALSE}
+# Connect to a HPC Create via SFTP using a private key 
+sftp -i~/.ssh/create_msc k21056636@hpc.
+create.kcl.ac.uk
+
+# Check remote working directory 
+pwd
+
+# Check local working directory 
+lpwd 
+
+# Direct to the working directory to where the reference genome is found on the local disk
+lcd /Users/aaranie.s/Desktop
+
+# Copy the folder containing the reference genome to the HPC.
+put -r ref_genome 
+
+# Exit, once the files are successfully uploaded over. 
+exit()
+```
+
+## Quality Control
+
+### Create nano script to quality control the fastqc files
+
+``` {bash, eval = FALSE}
+nano group_10 script 
+
+#!/bin/bash
+
+echo "start of the pipeline"
+
+module load fastqc
+
+# Define base and results directories
+baseDirectory="/scratch_tmp/grp/msc_appbio/group10/originals"
+resultsDirectory="/scratch_tmp/grp/msc_appbio/group10/outputs"
+
+# Create the results directory if it does not exist
+mkdir -p "$resultsDirectory"
+
+# Run Fast-QC on all .fastq.gz files in baseDirectory
+fastqc -o "$resultsDirectory" -t 4 "$baseDirectory"/*.fastq.gz
+
+echo "end of the pipeline"
+```
+
+### Log in into the interactive node, and execute the job
+
+``` {bash, eval=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=40)}
+# Execute a job interactively or within a batch script, by running commands on compute nodes for the msc_appbio partition 
+srun -p msc_appbio --pty /bin/bash
+
+# Submit a script via sbatch 
+sbatch fastqc.sh 
+
+# Monitor the  if the batch job is running (>10seconds = successful)
+squeue -u k21056636 
+
+# Check SLURM files to see up to date logs on the job 
+less slurm-(jobnumber).out 
+```
+
+## Indexing and Alignment
+
+### Indexing : Create a genome index, using STAR
+
+``` {bash, eval = FALSE}
+#!/bin/bash 
+
+# Load in the specific version of STAR. 
+module load star/2.7.10b-gcc-13.2.0
+
+# When running this on the command line,in a batch script ensure there are no extra spaces. There are extra spaces here to comment out the code. 
+STAR 
+  --runThreadN 10 # Number of threads used (i.e 10)
+  --runMode genomeGenerate # genomeGenerate mode 
+  --genomeDir /scratch_tmp/grp/msc_appbio/group10/originals/index/ # Path to store genome directory
+  --genomeFastaFiles /scratch_tmp/grp/msc_appbio/group10/ref_genome/GCF_000146045.2/GCF_000146045.2_R64_genomic.fna # Path to where the FASTA (raw data) files are located 
+  --sjdbGTFfile /scratch_tmp/grp/msc_appbio/group10/ref_genome/GCF_000146045.2/genomic.gtf # Path to GTF file 
+```
+
+### Alignment using the STAR aligner
+
+``` {bash, eval = FALSE}
+#!/bin/bash 
+
+# Prints line 
+echo "start of the pipeline"
+
+# Define the base directory, results directory and the genome directory 
+ 
+baseDirectory="/scratch_tmp/grp/msc_appbio/group10/originals/" # The base directory is the location of the raw sequencing data containing FASTA files
+
+resultsDirectory="/scratch_tmp/grp/msc_appbio/group10/outputs/" # The results directory is the location of where the outputs will be saved 
+
+genomeDir="/scratch_tmp/grp/msc_appbio/group10/originals/index/" # The genomeDir is the directory containing the genome index for STAR alignment
+
+# List files from the base directory that match the pattern "_1.fastq.gz" to remove them; extracting only the base name. 
+samples=$(ls "$baseDirectory"/*_1.fastq.gz | sed 's/_1.fastq.gz//' | xargs -n 1 basename)
+
+# Create a loop where samples are aligned using STAR and the genome index, saving the outputs as a BAM file. 
+for sample in $samples; do # Iterates through each item in the samples variable 
+  echo "Processing sample: $sample" # Prints a message indicating which sample is being processed 
+
+STAR 
+  --runThreadN 16 # Number of threads used (i.e 16) 
+  --genomeDir "$genomeDir" # Specifies the directory containing the STAR genome index
+  --readFilesCommand zcat # Decompresses the .gz files 
+  --readFilesIn "$baseDirectory${sample}_1.fastq.gz" "$baseDirectory${sample}_2.fastq.gz" # Specifies the input paired end FASTQ files 
+  --outFileNamePrefix "$resultsDirectory${sample}_" # Output files start with the sample name
+  --outSAMtype BAM SortedByCoordinate # Specifies output as a BAM file, sorted by genomic coordinates 
+
+done # End of loop 
+
+echo "pipeline completed" # Prints a message indicating all samples have been 
+
+# Exit editor
+
+# Submit a batch job, whilst on the interactive node
+sbatch alignment.sh 
+
+# Queue the job to check if it is running. Slurm files detail whether the job was successful for each sample. This job took approximately 4 hours on the CPU partition. 
+squeue -u k21056636
+```
+
+## Feature Counts
+
+### Create directory for Feature Counts output
+
+``` {bash, eval = FALSE}
+mkdir -p outputs/featureCounts
+```
+
+### Load subread module in order to perform read counting using featureCounts
+
+``` {bash, eval = FALSE}
+# Load subread module in order to perform read counting using featureCounts
+module load subread
+
+# Verify module has been loaded 
+module list
+```
+
+### Perform Read Counting by running featureCounts
+
+``` {bash, eval = FALSE}
+featureCounts -T 10 # Use 10 threads 
+-a /scratch_tmp/grp/msc_appbio/group10/ref_genome/GCF_000146045.2/genomic.gtf # Path to annotation file 
+-o /scratch_tmp/grp/msc_appbio/group10/outputs/featureCounts/all_samples_gene_counts.txt # Output file where the gene counts will be saved 
+-t exon # Count reads mapped to 'exon' features in the GTF file
+-g gene_id # Group counts by 'gene_id' in the GTF file 
+-p # Enable counting for paired end reads 
+-B # Requires pair-end reads to be aligned properly 
+--countReadPairs /scratch_tmp/grp/msc_appbio/group10/outputs/SRR11318268_Aligned.sortedByCoord.out.bam /scratch_tmp/grp/msc_appbio/group10/outputs/SRR11318269_Aligned.sortedByCoord.out.bam /scratch_tmp/grp/msc_appbio/group10/outputs/SRR11318270_Aligned.sortedByCoord.out.bam /scratch_tmp/grp/msc_appbio/group10/outputs/SRR11318271_Aligned.sortedByCoord.out.bam # Counts paired end reads in each sample. 
+```
+
+### Copy the featureCounts outputs from the HPC to local drive.
+
+#### This step is carried out in the local terminal.
+
+``` {bash, eval = FALSE}
+scp k21040223@erc-hpc-login1.create.kcl.ac.uk:/scratch_tmp/grp/msc_appbio/group10/outputs/featureCounts/all_samples_gene_counts.txt ~/Desktop/
+scp k21040223@erc-hpc-login1.create.kcl.ac.uk:/scratch_tmp/grp/msc_appbio/group10/outputs/featureCounts/all_samples_gene_counts.txt.summary ~/Desktop/ 
+```
+
+## Normalisation and Data Analysis
+
+### Install/load the required libraries for normalisation and data analysis
+
+```{r, eval=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=60)}
+# Install and Load required libraries and dependencies
+tinytex::install_tinytex(force = TRUE)
+install.packages("BiocManager")
+BiocManager::install("edgeR")
+BiocManager::install("DESeq2")
+BiocManager::install("tidyverse")
+
+library("tidyverse")
+library("edgeR")
+library("DESeq2")
+```
+
+### Verify working directory (Set if necessary)
+
+```{r, eval=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=60)}
+getwd()
+```
+
+### Load and verify gene counts data from featureCounts
+
+```{r, eval=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=60)}
+# Read the gene counts data into a data frame
+gene_counts <- read.table("~/Desktop/featureCounts/all_samples_gene_counts.txt",
+                          header = TRUE, # Use first row as column header
+                          row.names = 1, # Set the first column as row names (i.e gene IDs)
+                          comment.char = "#", # Ignore lines starting with #
+                          sep = "\t") # Separators are tab-delimited files
+gene_counts
+```
+
+### Formatting
+
+```{r, eval=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=60)}
+# Display the first few rows of the data set to confirm it has been loaded correctly 
+head(gene_counts)
+
+# Check the dimensions (rows = genes, columns = samples)
+dim(gene_counts)
+```
+
+### Preparing Gene Count Data for Analysis
+
+```{r, eval=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=60)}
+# Extract gene lengths for normalisation 
+gene_lengths <- gene_counts$Length
+
+# Remove annotation columns (e.g., gene lengths) to isolate the count data 
+gene_counts <- gene_counts[, -c(1:5)]
+
+# Verify that the data contains only raw counts for analysis 
+head(gene_counts)
+```
+
+### Create metadata to define sample conditions and replicates
+
+#### This ensures proper mapping of biological conditions during differential analysis
+
+```{r, eval=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=60)}
+# Create a data frame containing sample information, the condition/treatment applied and replicates
+metadata <- data.frame(
+    sample = c("SRR11318268", "SRR11318269", "SRR11318270", "SRR11318271"),
+    condition = c("control", "control", "methanol_treatment", "methanol_treatment"),
+    replicate = c("control_rep1", "control_rep2", "treatment_rep1", "treatment_rep2")
+)
+
+# Set the row names of the data frame to match the sample IDs
+rownames(metadata) <- metadata$sample
+```
+
+## Calculate RPKM, TPM and FPKM These measures account for differences in sequencing depth and gene length.
+
+### Normalise raw counts using edgeR
+
+```{r, eval=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=60)}
+# Create a DGEList object to store count data 
+# (DGElist is used by the edgeR package to store RNA-seq data)
+dge <- DGEList(counts = gene_counts)
+
+# Calculate normalisation factors to scale counts appropriately
+dge <- calcNormFactors(dge)
+```
+
+### Calculate Reads Per Kilobase Million (RPKM)
+
+```{r, eval=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=60)}
+# Calculate RPKM values (Reads Per Kilobase Million)
+rpkm_values <- rpkm(dge, gene.length = gene_lengths)
+
+# Save RPKM values
+write.csv(rpkm_values, file = "RPKM_values.csv")
+```
+
+### Calculate Transcripts Per Million (TPM)
+
+```{r, eval=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=60)}
+# Calculate TPM values (Transcripts Per Million)
+tpm <- function(counts, gene_length) {
+    rpkm <- counts / (gene_length / 1000)
+    scaling_factor <- colSums(rpkm) / 1000000
+    tpm <- sweep(rpkm, 2, scaling_factor, "/")
+    return(tpm)
+}
+tpm_values <- tpm(dge$counts, gene_lengths)
+
+# Save TPM values
+write.csv(tpm_values, file = "TPM_values.csv")
+```
+
+### Calculate Fragments Per Kilobase Million
+
+```{r, eval=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=60)}
+# Total fragments per sample (column sums of counts)
+total_fragments <- colSums(dge$counts)
+
+# Convert gene lengths to kilobases
+gene_lengths_kb <- gene_lengths / 1000
+
+# Calculate FPKM (Fragments Per Kilobase Million)
+fpkm_values <- sweep(dge$counts, 2, total_fragments / 1000000, "/")  # Normalise by total fragments (in millions)
+fpkm_values <- sweep(fpkm_values, 1, gene_lengths_kb, "/") # Normalise by gene length (in kilobases)
+
+# Save FPKM values
+write.csv(fpkm_values, file = "FPKM_values.csv")
+```
+
+### Align column names of gene_counts with row names of metadata for compatibility
+
+```{r, eval=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=60)}
+colnames(gene_counts) <- rownames(metadata)
+```
+
+## Differential Expression Analysis using DESeq2
+
+### Identify genes that are differentially expressed between control and treated samples
+
+```{r, eval=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=60)}
+# Create DESeq2 data set
+dds <- DESeqDataSetFromMatrix(countData = gene_counts, colData = metadata, design = ~ condition)
+
+# Run the DESeq2 analysis to identify differential expression
+dds <- DESeq(dds)
+
+# Extract results and filter by significance (adjusted p-value < 0.01)
+res <- results(dds, alpha = 0.1)
+significant_genes <- res[which(res$padj < 0.01), ]
+
+# Save significant genes
+write.csv(as.data.frame(significant_genes), file = "Significant_Genes.csv")
+```
+
+### Generate a Volcano Plot to visualize significant genes based on adjusted p-value and log2 fold change
+
+```{r, eval=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=60)}
+library(ggplot2)
+library(ggrepel)
+
+# Convert DESeq2 results to a data frame
+volcano_data <- as.data.frame(res)  # 'res' is the DESeq2 results object
+
+# Add gene names as a new column as currently the genes are listed without a column name
+volcano_data$gene_name <- rownames(volcano_data)
+
+# Remove rows with NA values in p adj or log2Fold-change
+volcano_data <- na.omit(volcano_data)
+
+# Filter only significant genes for labeling
+volcano_data$significant <- volcano_data$padj < 0.01
+label_data <- volcano_data[volcano_data$significant == TRUE, ]  # Only significant genes
+
+# Select the top 10 most significant genes based on adjusted p-value
+top10_genes <- label_data[order(label_data$padj), ][1:10, ]  # Sort by p adj and take top 10
+
+# Plot the Volcano Plot with labels
+ggplot(volcano_data, aes(x = log2FoldChange, y = -log10(padj), colour = significant)) +
+  geom_point(alpha = 0.6) + # Add slightly transparent plot points
+    scale_colour_manual(
+    name = "Significance",  # Set legend title
+    values = c("cornflowerblue", "indianred"),  # Colours for the points
+    labels = c("Not Significant", "Significant")  # Update legend labels
+  ) +
+  geom_text_repel(data = top10_genes, 
+                  aes(label = gene_name), # Add gene names as labels
+                  size = 3, # Font size for labels 
+                  max.overlaps = 10, # Limit the number of label overlaps
+                  segment.colour = "transparent") +  # Hide line segments connecting labels to points 
+  
+  labs(title = "Volcano Plot of Differentially Expressed Genes", # Plot title 
+       x = "Log2 Fold Change", # Label for x-axis
+       y = "-log10 Adjusted P-Value") + # Label for y-axis
+  theme_minimal() +
+  theme(legend.position = "top", # Position the legend at the top of the plot 
+        plot.title = element_text(face = "bold")) # Bold the plot title
+
+# Save the plot as a PNG file. 
+ggsave("Volcano_Plot.png", bg = "white") 
+```
+
+### Generate a Heat-map to visualize expression patterns for the top 20 significant genes
+
+```{r, eval=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=60)}
+# Perform Variance-Stabilizing Transformation (VST) for normalisation
+vsd <- vst(dds, blind = FALSE)
+
+# Select top 20 significant genes based on adjusted p-value
+top_genes <- head(order(res$padj), 20)
+
+# Extract normalised counts for the top genes
+heatmap_data <- assay(vsd)[top_genes, ]
+
+# Scale the data (Z-score normalisation across samples)
+scaled_data <- t(scale(t(heatmap_data)))
+
+# Reshape data for ggplot
+library(reshape2) # Load reshape2 
+heatmap_long <- melt(scaled_data) # Reshapes the data to long format 
+colnames(heatmap_long) <- c("Gene", "Sample", "Expression") # Columns names to the reshaped data
+
+# Produce a Heat-map
+library(ggplot2) # Load ggplot2 for data visualisation 
+ggplot(heatmap_long, aes(x = Sample, y = Gene, fill = Expression)) +
+    geom_tile(colour = "white") + # White bordered tile for better visibility 
+    scale_fill_gradient2(
+      low = "dodgerblue", # Colour for low expression values 
+      mid = "grey90", # Colour for mid-range expression values 
+      high = "darkred", # Colour for high expression values 
+      midpoint = 0) + # Centre the gradient at zero
+    labs(
+        title = "Heatmap of Top Differentially Expressed Genes", # Add plot title 
+        x = "Samples", # Label for x-axis
+        y = "Genes", # Label for y-axis 
+        fill = "Z-score" # Label for colour legend 
+    ) +
+    theme_minimal() +
+    theme(
+        axis.text.x = element_text(angle = 45, hjust = 1, size = 10), # Rotate x-axis labels for readability 
+        axis.text.y = element_text(size = 8), # Adjust font size for y-axis labels 
+        plot.title = element_text(size = 14, face = "bold", hjust = 0.5) # Adjust font size of the title, make bold and centre it
+    )
+
+# Save the plot as a PNG file
+ggsave("Heatmap.png", bg = "white")
+
+```
+
+## Gene Ontology
+
+YeastMine is no longer available due to discontinued support with its
+alternative AllianceMine not reliable for enrichment analysis with our
+gene lists for Saccharomyces Cerevisiae. For the sake of reproducing the
+results we opted to use a tool/package in R which can do enrichment
+analysis and has all the parameters we need such as Holm-Bonferroni
+correction - clusterProfiler.
+
+### Install and load libraries and dependencies
+
+```{r, eval=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=60)}
+# Installation
+install.packages("BiocManager")
+BiocManager::install("clusterProfiler")
+BiocManager::install("org.Sc.sgd.db") # Annotation package for Saccharomyces cerevisiae
+BiocManager::install("ReactomePA") # Install ReactomePA (for Reactome pathway enrichment)
+BiocManager::install("biomaRt")
+
+# Loading
+library(clusterProfiler)
+library(org.Sc.sgd.db)
+library(ReactomePA)
+library(biomaRt)
+```
+
+### Load the up and down regulated files in R for analysis
+
+```{r, eval=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=60)}
+# Extract up and down regulated genes
+
+# Load the significant genes CSV file
+significant_genes <- read.csv("~/Desktop/APP_BIO/ABCC_grp10/Significant_Genes.csv")
+
+# Filter upregulated genes (Log2Fold-change > 0)
+upregulated_genes <- significant_genes[significant_genes$log2FoldChange > 0, "X"] # X is the column name for which the gene names are listed - that is the only column we need
+
+# Filter downregulated genes (log2Fold-change < 0)
+downregulated_genes <- significant_genes[significant_genes$log2FoldChange < 0, "X"]
+
+# Save upregulated genes to a text file
+writeLines(upregulated_genes, "Upregulated_Genes.txt")
+
+# Save downregulated genes to a text file
+writeLines(downregulated_genes, "Downregulated_Genes.txt")
+
+# Save upregulated and downregulated genes into plain text files
+upregulated_genes <- readLines("Upregulated_Genes.txt")
+downregulated_genes <- readLines("Downregulated_Genes.txt")
+
+# Check the first few entries to confirm successful loading
+head(upregulated_genes)
+head(downregulated_genes)
+
+# View the sum of upregulated and downregulated genes
+print(length(upregulated_genes))
+print(length(downregulated_genes))
+```
+
+## Perform GO Enrichment Analysis and Pathway Enrichment on Upregulated Genes
+
+```{r, eval=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=60)}
+library(clusterProfiler)
+library(org.Sc.sgd.db)
+library(ReactomePA)
+library(biomaRt)
+
+# Perform GO enrichment - Upregulated Genes
+up_go_enrichment <- enrichGO(
+    gene          = upregulated_genes, # Annotation database for Saccharomyces cerevisiae
+    OrgDb         = org.Sc.sgd.db,
+    keyType       = "ORF", # Use ORF (open reading frame) IDs as the gene list match this key type 
+    ont           = "ALL", # Analyze all GO categories (Biological Process, Molecular Function, Cellular Component)
+    pAdjustMethod = "holm", # Holm-Bonferroni correction
+    pvalueCutoff  = 0.05, # P-value threshold
+    qvalueCutoff  = 0.2 # Q-value threshold
+)
+
+# Convert ORF IDs to ENTREZ IDs for KEGG and Reactome pathway enrichment
+# KEGG and Reactome use ENTREZ IDs as the unique identifier for gene models.
+# Conversion is done using mapIds() to ensure compatibility with these tools.
+orf_to_entrez <- mapIds(
+    org.Sc.sgd.db,
+    keys = upregulated_genes,
+    column = "ENTREZID",           # Convert to ENTREZ IDs
+    keytype = "ORF",               # Input key type is ORF
+    multiVals = "first"
+)
+upregulated_genes_entrez <- na.omit(orf_to_entrez)
+
+# Perform KEGG pathway enrichment
+up_kegg_enrichment <- enrichKEGG(
+    gene          = upregulated_genes_entrez,
+    organism      = "sce",         # Saccharomyces cerevisiae
+    pAdjustMethod = "holm",
+    pvalueCutoff  = 0.05,
+    qvalueCutoff  = 0.2
+)
+
+# Perform Reactome pathway enrichment
+up_reactome_enrichment <- enrichPathway(
+    gene          = upregulated_genes_entrez,
+    organism      = "yeast",       # Use yeast for Reactome
+    pAdjustMethod = "holm",
+    pvalueCutoff  = 0.05,
+    qvalueCutoff  = 0.2
+)
+```
+
+### Check whether the mapIds() function successfully converted your ORF IDs to ENTREZ IDs:
+
+```{r, eval=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=60)}
+print(head(orf_to_entrez))
+print(sum(is.na(orf_to_entrez))) # Count unmapped IDs
+```
+
+ORF IDs were successfully converted to ENTREZ IDs. '[1] 1' means 1 gene
+ID from the original list could not be mapped to an ENTREZ ID. One
+unmapped gene will not affect the rest of the analysis.
+
+```{r, eval=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=60)}
+# Print unmapped genes 
+unmapped_genes <- names(orf_to_entrez)[is.na(orf_to_entrez)]
+print(unmapped_genes)
+```
+
+When looking at the ENSEMBL Genome Browser "YNCG0047C" does not exist
+which explains why it was not mapped. This will not impact subsequent
+analysis as it will be automatically removed. The following code is used
+to query ENSEMBL for the unmapped gene. This service was unavailable at
+the time, therefore the code is commented out. To address this, the gene
+was manually checked in the database was not found.
+
+```{r, eval=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=60)}
+# Connect to Ensembl (Saccharomyces cerevisiae data set)
+#ensembl <- useMart("ensembl", data set = "scerevisiae_gene_ensembl")
+#ensembl <- useMart("ensembl", data set = "scerevisiae_gene_ensembl", host = "http://www.ensembl.org") ## this is the mirror site
+
+# Query Ensembl to get information about the gene
+#conversion <- getBM(
+    #attributes = c("external_gene_name", "entrezgene_id"),
+    #filters = "external_gene_name",
+    #values = "YNCG0047C",  # Replace with the gene you're searching for
+    #mart = ensembl
+#)
+
+#print(conversion)  # Check if the gene exists in Ensembl
+```
+
+#### View and Save results for Upregulated Genes
+
+```{r, eval=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=60)}
+# View and save results
+if (!is.null(up_go_enrichment)) {
+  write.csv(as.data.frame(up_go_enrichment), "Upregulated_Genes_GO_Enrichment.csv", row.names = FALSE)
+  message("GO enrichment results saved.")
+} else {
+  message("GO enrichment returned no results. Skipping.")
+}
+
+if (!is.null(up_kegg_enrichment)) {
+  write.csv(as.data.frame(up_kegg_enrichment), "Upregulated_Genes_KEGG_Enrichment.csv", row.names = FALSE)
+  message("KEGG enrichment results saved.")
+} else {
+  message("KEGG enrichment returned no results. Skipping.")
+}
+
+if (!is.null(up_reactome_enrichment)) {
+  write.csv(as.data.frame(up_reactome_enrichment), "Upregulated_Genes_Reactome_Enrichment.csv", row.names = FALSE)
+  message("Reactome enrichment results saved.")
+} else {
+  message("Reactome enrichment returned no results. Skipping.")
+}
+```
+
+```{r, eval=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=60)}
+print(length(upregulated_genes_entrez))  # Number of genes after mapping
+print(sum(is.na(upregulated_genes_entrez)))  # Count of unmapped genes
+```
+
+There were 89 mapped genes in total, with no NA values. There were no
+issues with the mapping process for the KEGG enrichment analysis and all
+genes were successfully mapped to ENTREZ IDs. Absence of results from
+the KEGG enrichment might be due to genes not being strongly associated
+with any KEGG pathways based on the analysis parameters (p-value or
+q-value cutoffs).
+
+## Perform GO Enrichment Analysis and Pathway Enrichment on Downregulated Genes
+
+```{r, eval=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=60)}
+# Perform GO enrichment - Downregulated Genes
+down_go_enrichment <- enrichGO(
+    gene          = downregulated_genes, # Annotation database for Saccharomyces cerevisiae
+    OrgDb         = org.Sc.sgd.db,
+    keyType       = "ORF", # Use ORF (open reading frame) IDs as the gene list match this key type 
+    ont           = "ALL", # Analyze all GO categories (Biological Process, Molecular Function, Cellular Component)
+    pAdjustMethod = "holm", # Holm-Bonferroni correction
+    pvalueCutoff  = 0.05, # P-value threshold
+    qvalueCutoff  = 0.2 # Q-value threshold
+)
+
+# Convert ORF IDs to ENTREZ IDs for KEGG and Reactome pathway enrichment
+# KEGG and Reactome use ENTREZ IDs as the unique identifier for gene models.
+# Conversion is done using mapIds() to ensure compatibility with these tools.
+orf_to_entrez <- mapIds(
+    org.Sc.sgd.db,
+    keys = downregulated_genes,
+    column = "ENTREZID", # Convert to ENTREZ IDs
+    keytype = "ORF", # Input key type is ORF
+    multiVals = "first"
+)
+downregulated_genes_entrez <- na.omit(orf_to_entrez)
+
+# Perform KEGG pathway enrichment
+down_kegg_enrichment <- enrichKEGG(
+    gene          = downregulated_genes_entrez,
+    organism      = "sce", # Saccharomyces cerevisiae
+    pAdjustMethod = "holm",
+    pvalueCutoff  = 0.05,
+    qvalueCutoff  = 0.2
+)
+
+# Perform Reactome pathway enrichment
+down_reactome_enrichment <- enrichPathway(
+    gene          = downregulated_genes_entrez,
+    organism      = "yeast",       # Use yeast for Reactome
+    pAdjustMethod = "holm",
+    pvalueCutoff  = 0.05,
+    qvalueCutoff  = 0.2
+)
+```
+
+#### Check the downregulated genes after mapping to ENTREZ IDs, to see if any gene was not mapped
+
+```{r, eval=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=60)}
+print(length(downregulated_genes_entrez))
+print(sum(is.na(downregulated_genes_entrez)))  # Number of unmapped genes
+```
+
+Since the result of sum(is.na(downregulated_genes_entrez)) is 0, that
+means all downregulated genes were successfully mapped to ENTREZ IDs. No
+mapping errors.
+
+#### View and Save results for Downregulated Genes
+
+```{r, eval=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=60)}
+# View and save results
+if (!is.null(down_go_enrichment)) {
+  write.csv(as.data.frame(down_go_enrichment), "Downregulated_Genes_GO_Enrichment.csv", row.names = FALSE)
+  message("GO enrichment results saved.")
+} else {
+  message("GO enrichment returned no results. Skipping.")
+}
+
+if (!is.null(down_kegg_enrichment)) {
+  write.csv(as.data.frame(down_kegg_enrichment), "Downregulated_Genes_KEGG_Enrichment.csv", row.names = FALSE)
+  message("KEGG enrichment results saved.")
+} else {
+  message("KEGG enrichment returned no results. Skipping.")
+}
+
+if (!is.null(down_reactome_enrichment)) {
+  write.csv(as.data.frame(down_reactome_enrichment), "Downregulated_Genes_Reactome_Enrichment.csv", row.names = FALSE)
+  message("Reactome enrichment results saved.")
+} else {
+  message("Reactome enrichment returned no results. Skipping.")
+}
+```
+
+The KEGG enrichment results returned no results. This could be due to
+the genes in the data set may not be well annotated in KEGG pathways
+making them unsuitable to be represented by this enrichment. Or, the
+specific p-value threshold used and correction test applied may have had
+an effect, whilst making it harder for KEGG to identify trends.
+
+## Visualising Upregulated Enrichment Analysis
+
+```{r, eval=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=60)}
+# Load in libraries 
+library("ggplot2")
+library("dplyr")
+
+# Combine enrichment results
+
+# Extract top terms from GO enrichment
+go_df <- as.data.frame(up_go_enrichment) %>%
+  filter(!is.na(p.adjust)) %>% # Use adjusted p-value, exclude NA data
+  mutate(p.adjust = as.numeric(p.adjust)) %>% #ensures it is atomic (data is of a single numeric type)
+  filter(p.adjust < 0.05) %>% # Use adjusted p-value for filtering
+  mutate(source = "GO: Biological Process") %>%  # Add source annotation
+  select(Term = Description, p.adjust, Count, source)
+
+# Extract top terms from Reactome enrichment
+reactome_df <- as.data.frame(up_reactome_enrichment) %>%
+    filter(p.adjust < 0.05) %>%
+    mutate(source = "Reactome Pathway") %>%
+    dplyr::select(Term = Description, p.adjust, Count, source)
+
+# Combine all results
+combined_df <- bind_rows(go_df, reactome_df) %>%
+    mutate(log_p = -log10(p.adjust))  # Calculate -log10(p-value)
+
+# Limit terms to the top 20 based on significance
+combined_df <- combined_df %>% arrange(log_p) %>% slice_head(n = 20)
+
+# Sort terms by significance for plotting
+combined_df <- combined_df %>%
+    arrange(log_p) %>%
+    mutate(Term = factor(Term, levels = unique(Term))) # Maintain order for plotting
+
+# Plot with enhancements
+ggplot(combined_df, aes(x = log_p, y = Term, size = Count, color = source)) +
+  geom_point(alpha = 0.7) +
+  theme_minimal() +
+  labs(
+    title = "Top 20 Enrichment Analysis for Upregulated Genes",
+    x = "-log10(p-value)",
+    y = "Enriched Terms",
+    size = "Gene Count",
+    color = "Source"
+  ) +
+  theme(
+    axis.text.y = element_text(size = 8),
+    plot.title = element_text(size = 16, face = "bold", hjust = 0.5, margin = margin(b = 20)),  # Adjust title margin
+    plot.margin = margin(t = 20, r = 20, b = 20, l = 20)  # Add overall plot margin
+  )
+
+# Save the updated plot
+ggsave("Upregulated_Enrichment_plot.png", bg = "white")
+```
+
+## Visualising Downregulated Enrichment Analysis
+
+```{r, eval=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=60)}
+library("ggplot2")
+library("dplyr")
+
+# Combine enrichment results
+
+# Extract top terms from GO enrichment
+go_df <- as.data.frame(down_go_enrichment) %>%
+  filter(!is.na(p.adjust)) %>% # Use adjusted p-value, exclude NA data
+  mutate(p.adjust = as.numeric(p.adjust)) %>% #ensures it is atomic (data is of a single numeric type)
+  filter(p.adjust < 0.05) %>% # Use adjusted p-value for filtering
+  mutate(source = "GO: Biological Process") %>%  # Add source annotation
+  select(Term = Description, p.adjust, Count, source)
+
+# Extract top terms from Reactome enrichment
+reactome_df <- as.data.frame(down_reactome_enrichment) %>%
+    filter(p.adjust < 0.05) %>%
+    mutate(source = "Reactome Pathway") %>%
+    dplyr::select(Term = Description, p.adjust, Count, source)
+
+# Combine all results
+combined_df <- bind_rows(go_df, reactome_df) %>%
+    mutate(log_p = -log10(p.adjust))  # Calculate -log10(p-value)
+
+# Limit terms to the top 20 based on significance
+combined_df <- combined_df %>% arrange(log_p) %>% slice_head(n = 20)
+
+# Sort terms by significance for plotting
+combined_df <- combined_df %>%
+    arrange(log_p) %>%
+    mutate(Term = factor(Term, levels = unique(Term))) # Maintain order for plotting
+
+# Plot with enhancements
+ggplot(combined_df, aes(x = log_p, y = Term, size = Count, color = source)) +
+  geom_point(alpha = 0.7) +
+  theme_minimal() +
+  labs(
+    title = "Top 20 Enrichment Analysis for Downregulated Genes",
+    x = "-log10(p-value)",
+    y = "Enriched Terms",
+    size = "Gene Count",
+    color = "Source"
+  ) +
+  theme(
+    axis.text.y = element_text(size = 8),
+    plot.title = element_text(size = 16, face = "bold", hjust = 0.5, margin = margin(b = 20)),  # Adjust title margin
+    plot.margin = margin(t = 20, r = 20, b = 20, l = 20)  # Add overall plot margin
+  )
+
+# Save the updated plot                                       
+ggsave("Downregulated_Enrichment_plot.png", bg = "white")
+```
+
+```{r}
+system("git push origin main --force")
+```
+
+
+
+
+
